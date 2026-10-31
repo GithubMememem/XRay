@@ -26,6 +26,6 @@ The ZIP mode safely extracts supported source/text files and reconstructs them i
 - Uses clang-format when installed and requested.
 
 ## Important limits
-XRay does **not** turn arbitrary EXE, DLL, APK, SO, or WASM binaries back into their original source code. Extract or disassemble binaries with suitable tools first (for example JADX for Android apps, Ghidra or objdump for native binaries, and wasm-tools for WebAssembly), then pass the resulting text/source files to XRay. XRay never executes uploaded or analyzed binaries.
+XRay now has optional local binary-analysis adapters. APK files can be decompiled with JADX, native EXE/DLL/SO/ELF files with Ghidra headless, and WASM files with WABT. Install the relevant tool and follow [Binary tool setup](docs/BINARY_TOOLS.md), then run the same CLI command with the binary as input. These tools produce extracted resources, disassembly, or approximate pseudocode—not the exact original source. XRay never executes the target binary.
 
 All transformations are heuristic and may change program meaning. Keep the original file, inspect the diff, and compile/test reconstructed code before relying on it.
