@@ -20,6 +20,14 @@ a{color:inherit;text-decoration:none}button,input,textarea{font:inherit}.shell{m
 .status{min-height:24px;color:var(--lime);font-size:13px;margin:8px 2px}.drop{border:1px dashed #3a5268;background:#0c141d;border-radius:12px;padding:18px;text-align:center;color:#aebdca;cursor:pointer}.drop strong{color:white}.drop.drag{border-color:var(--blue);background:#092039}.drop input{display:none}
 .log{background:#0b1016;border:1px solid var(--line);border-radius:11px;padding:13px 15px;color:#91a1b0;font:12px/1.7 ui-monospace,monospace;min-height:65px;white-space:pre-wrap}
 .info{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:12px;margin-top:18px}.info article{border:1px solid var(--line);background:#10151c;border-radius:12px;padding:15px}.info b{display:block;font-size:13px;margin-bottom:4px}.info p{font-size:12px;color:var(--muted);margin:0}.foot{color:#687787;font-size:11px;margin-top:30px;display:flex;justify-content:space-between;gap:15px}
+/* Launcher-inspired surfaces layered over the Betastar starfield */
+.search input{background:#f2f4f5;color:#18212b;border-color:#dce2e8}.search input::placeholder,.manual input::placeholder{color:#7c8792}
+.manual input{background:#f2f4f5;color:#18212b;border-color:#dce2e8}
+.tile{background:#fff;border-color:#e3e8ed;color:#18212b;box-shadow:0 5px 18px #00000012}
+.tile:hover{border-color:#9dcff0;box-shadow:0 9px 24px #00000020}
+.tile h3{color:#17212b}.tile p,.tile small{color:#687583}
+.fileicon{background:#e5f5ff;color:#087fc3}
+.drop{background:#f2f4f5;color:#5d6976;border-color:#b9c8d4}.drop strong{color:#18212b}
 [hidden]{display:none!important}
 @media(max-width:850px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace{grid-template-columns:1fr}.hero{align-items:flex-start;flex-direction:column}.info{grid-template-columns:1fr}.navlinks{display:none}}
 @media(max-width:560px){.shell{padding:0 14px 35px}.nav{height:65px}.local{display:none}.cards{grid-template-columns:1fr}.searchrow{align-items:stretch;flex-direction:column}.manual input{width:100%}.manual{width:100%}.hero{padding-top:32px}.editor{height:290px}}
