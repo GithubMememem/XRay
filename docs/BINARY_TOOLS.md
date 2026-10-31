@@ -6,7 +6,7 @@ XRay can launch specialist local tools for common binary formats. Install the re
 |---|---|---|
 | APK | JADX (jadx) | Java-like decompiled sources and resources |
 | EXE, DLL, SO, ELF, object files | Ghidra (analyzeHeadless) | Per-function C-like pseudocode |
-| WASM | WABT (wasm-decompile or wasm2wat) | C-like pseudocode or WebAssembly text |
+| WASM | WABT (wasm-validate, wasm-objdump, wasm2wat) | Validation report, section inventory, SHA-256 manifest and WAT |
 
 ## Install in Codespaces
 
@@ -14,7 +14,7 @@ XRay can launch specialist local tools for common binary formats. Install the re
 - **Ghidra:** download from https://github.com/NationalSecurityAgency/ghidra/releases, unpack it, and add Ghidra's support directory to PATH.
 - **WABT:** use your distribution package manager where available, or download from https://github.com/WebAssembly/wabt.
 
-Check installation with jadx --version, analyzeHeadless, or wasm-decompile --help.
+Check installation with `jadx --version`, `analyzeHeadless`, `wasm-validate --version`, `wasm-objdump --version`, and `wasm2wat --version`.
 
 ## Run
 
@@ -22,7 +22,9 @@ Check installation with jadx --version, analyzeHeadless, or wasm-decompile --hel
     python engine/xray.py program.exe -o output/
     python engine/xray.py module.wasm -o output/
 
-For native binaries, XRay uses ghidra/ExportDecompiled.java to export decompiler output for discovered functions.
+For native binaries, XRay uses `ghidra/ExportDecompiled.java` to export decompiler output for discovered functions.
+
+For WASM, the Python engine uses the REA-style staged workflow: validate the selected bytes, inspect section metadata, decode WAT, and write a JSON manifest containing the input size, SHA-256 and tool paths. The browser UI performs bounded structural parsing itself, then uses WABT for validation and WAT conversion. Both paths are static inspection; they do not execute the module.
 
 ## Important
 
