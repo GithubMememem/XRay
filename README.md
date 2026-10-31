@@ -6,11 +6,11 @@ XRay is a local-first binary inspection and source reconstruction workspace. The
 
 Open [index.html](index.html), or enable GitHub Pages (Settings → Pages → Deploy from a branch → main → /root).
 
-- **WebAssembly:** open a `.wasm` file and XRay loads WABT's JavaScript/WebAssembly build in the browser to convert it to readable `.wat` text. The conversion runs in the browser tab; the file is not uploaded.
+- **WebAssembly:** open a `.wasm` file and XRay parses the module header, section boundaries, imports, exports, function/type counts and SHA-256 locally. It then asks WABT to validate the module and convert it to readable `.wat`. The file is not uploaded. The inspection flow is inspired by REA's evidence-first WASM workflow; see `web/wasm-inspector.js` and `THIRD_PARTY_NOTICES.md`.
 - **Source and decompiler output:** paste or open C/C++, JavaScript, Java, ASM, WAT and text, then run the conservative cleanup pass locally.
 - **Export:** save the generated WAT or reconstructed text from the workspace.
 
-The WABT module is loaded from esm.sh on first WASM use, so an internet connection is needed for that first library load. After it loads, the actual conversion runs locally in the browser. WebGPU is not required: WebGPU accelerates certain GPU workloads but is not a general-purpose decompiler.
+The WABT JavaScript module is loaded from esm.sh on first WASM use, so an internet connection is needed for that first library load. After it loads, parsing, validation and conversion run locally in the browser. Browser inspection is capped at 8 MiB to bound memory use. WebGPU is not required: WebGPU accelerates certain GPU workloads but is not a general-purpose decompiler.
 
 ## Python engine
 
@@ -25,7 +25,7 @@ python engine/xray.py program.exe -o output/
 ```
 
 Optional binary tools:
-- WASM: WABT (`wasm-decompile` or `wasm2wat`)
+- WASM: WABT (`wasm-validate`, `wasm-objdump`, and `wasm2wat` recommended; `wasm-decompile` is a fallback)
 - APK: JADX
 - Native EXE/DLL/ELF/SO/object files: Ghidra headless
 
