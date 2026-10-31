@@ -211,7 +211,12 @@ def main() -> int:
             status = process_text(args.input, args.output, args.element_size, args.clang_format)
             print(f"XRay: {status} → {args.output}")
         else:
-            raise ValueError("unsupported input. For EXE/DLL/APK/SO/WASM binaries, extract or disassemble first; XRay does not execute binaries or recover original source directly.")
+            from binary_tools import decompile_binary, is_supported_binary
+            if is_supported_binary(args.input):
+                summary = decompile_binary(args.input, args.output)
+                print(f"XRay: {summary}")
+            else:
+                raise ValueError("unsupported input format. See README.md for supported source and binary types.")
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
         print(f"XRay error: {exc}", file=sys.stderr)
         return 2
