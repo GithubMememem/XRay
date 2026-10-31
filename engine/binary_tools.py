@@ -32,15 +32,24 @@ def _inspect_wasm(source: Path, output: Path) -> str:
     if size > WASM_MAX_BYTES:
         raise RuntimeError(f"WASM input exceeds XRay's {WASM_MAX_BYTES}-byte safety limit.")
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
+
+    def assert_unchanged() -> None:
+        current = hashlib.sha256(source.read_bytes()).hexdigest()
+        if current != digest:
+            raise RuntimeError("WASM input changed during analysis; refusing to mix evidence from different file contents.")
     validate = shutil.which("wasm-validate")
     objdump = shutil.which("wasm-objdump")
     wasm2wat = shutil.which("wasm2wat")
     decompile = shutil.which("wasm-decompile")
 
     if validate and objdump and wasm2wat:
-        validation = _run([validate, "--enable-all", "--ignore-custom-section-errors", str(source)])
-        sections = _run([objdump, "-h", "-x", str(source)])
-        wat = _run([wasm2wat, "--enable-all", "--ignore-custom-section-errors", str(source)])
+        assert_unchanged()
+        validation = _run([validate, "--enable-all", "--ignore-custom-section-errors", str(source)], timeout=30)
+        assert_unchanged()
+        sections = _run([objdump, "-h", "-x", str(source)], timeout=30)
+        assert_unchanged()
+        wat = _run([wasm2wat, "--enable-all", "--ignore-custom-section-errors", str(source)], timeout=30)
+        assert_unchanged()
         (output / (source.stem + ".validation.txt")).write_text(
             "WABT validation passed.\n" + (validation.stdout or validation.stderr), encoding="utf-8"
         )
@@ -73,11 +82,15 @@ def _inspect_wasm(source: Path, output: Path) -> str:
 
     if decompile:
         target = output / (source.stem + ".decompiled.c")
-        _run([decompile, str(source), "-o", str(target)])
+        assert_unchanged()
+        _run([decompile, str(source), "-o", str(target)], timeout=30)
+        assert_unchanged()
         return f"WASM translated to C-like pseudocode: {target}. Install wasm-validate, wasm-objdump and wasm2wat for full artifact inspection."
     if wasm2wat:
         target = output / (source.stem + ".wat")
-        _run([wasm2wat, str(source), "-o", str(target)])
+        assert_unchanged()
+        _run([wasm2wat, str(source), "-o", str(target)], timeout=30)
+        assert_unchanged()
         return f"WASM converted to WAT text: {target}. Install wasm-validate and wasm-objdump for validation and section evidence."
     raise RuntimeError(
         "WASM support requires WABT. Install wasm-validate, wasm-objdump and wasm2wat "
