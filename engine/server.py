@@ -18,7 +18,7 @@ from pathlib import Path
 from binary_tools import decompile_binary, is_supported_binary
 
 ROOT = Path(__file__).resolve().parents[1]
-MAX_UPLOAD = 512 * 1024 * 1024
+MAX_UPLOAD = 128 * 1024 * 1024
 ALLOWED_ORIGINS = {
     "https://githubmememem.github.io",
     "http://127.0.0.1:8765",
@@ -33,7 +33,7 @@ def make_bundle(source_name: str, payload: bytes) -> tuple[bytes, str]:
     if suffix not in {".apk", ".exe", ".dll", ".elf", ".so", ".dylib", ".o", ".a", ".wasm"}:
         raise ValueError("Supported binaries: APK, EXE, DLL, ELF, SO, DYLIB, O, A and WASM.")
     if len(payload) > MAX_UPLOAD:
-        raise ValueError("Upload exceeds the 512 MiB local-engine limit.")
+        raise ValueError("Upload exceeds the 128 MiB local-engine limit.")
     with tempfile.TemporaryDirectory(prefix="xray-") as temporary:
         root = Path(temporary)
         source = root / ("input" + suffix)
@@ -108,7 +108,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length", "0"))
         if length <= 0 or length > MAX_UPLOAD + 1024 * 1024:
-            self.json_response(413, {"error": "Missing file or upload exceeds 512 MiB."})
+            self.json_response(413, {"error": "Missing file or upload exceeds 128 MiB."})
             return
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
