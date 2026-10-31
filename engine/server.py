@@ -28,7 +28,7 @@ JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
-def make_bundle(source_name: str, payload: bytes) -> tuple[bytes, str]:
+def make_bundle(source_name: str, payload: bytes, progress=None) -> tuple[bytes, str]:
     suffix = Path(source_name).suffix.lower()
     if suffix not in {".apk", ".exe", ".dll", ".elf", ".so", ".dylib", ".o", ".a", ".wasm"}:
         raise ValueError("Supported binaries: APK, EXE, DLL, ELF, SO, DYLIB, O, A and WASM.")
@@ -41,7 +41,7 @@ def make_bundle(source_name: str, payload: bytes) -> tuple[bytes, str]:
         source.write_bytes(payload)
         if not is_supported_binary(source):
             raise ValueError("Unsupported binary type.")
-        summary = decompile_binary(source, output)
+        summary = decompile_binary(source, output, progress)
         bundle = io.BytesIO()
         with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as archive:
             for item in output.rglob("*"):
@@ -133,10 +133,13 @@ class Handler(BaseHTTPRequestHandler):
             JOBS[job_id] = {"status": "running", "progress": 18, "stage": "File received; preparing analysis", "result": None, "error": None}
 
         def run() -> None:
-            with LOCK:
-                JOBS[job_id].update(progress=32, stage="Starting JADX, Ghidra or WABT")
+            def update_progress(value: int, stage: str) -> None:
+                with LOCK:
+                    JOBS[job_id].update(progress=value, stage=stage)
+            update_progress(25, "Preparing isolated analysis workspace")
             try:
-                bundle, summary = make_bundle(Path(name).name, data)
+                bundle, summary = make_bundle(Path(name).name, data, update_progress)
+                update_progress(97, "Packaging analysis artifacts")
                 with LOCK:
                     JOBS[job_id].update(status="complete", progress=100, stage="Analysis complete", result=bundle, summary=summary)
             except Exception as error:
