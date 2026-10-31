@@ -12,16 +12,28 @@ The GitHub Pages site can inspect WASM in the browser and clean existing source/
 
 1. Install Python 3.10+.
 2. Install JADX for APK files and Ghidra for EXE/DLL/ELF/SO files. Ensure `jadx` or `analyzeHeadless` is on PATH.
-3. From the repository root, start the local API:
+3. From the repository root, start the local API.
+
+   **On a normal desktop:**
 
    ```bash
-   python engine/server.py
+   python3 engine/server.py
    ```
 
-4. Leave the server running. In the XRay website, keep the engine address set to `http://127.0.0.1:8765` and click **Check connection**.
-5. Choose an APK, EXE, DLL, ELF, SO, or other supported binary. XRay submits it to your own local engine, displays job progress, and downloads a ZIP containing decompiler output and an analysis report.
+   **On a Chromebook using the Linux development environment (Crostini):** ChromeOS runs Linux in a separate container, so a server bound only to Linux's `127.0.0.1` may not be reachable from the Chrome browser. Start it with a token and listen for ChromeOS port forwarding:
 
-The local API binds only to loopback and accepts requests from the official GitHub Pages origin or the local UI. It does not expose a public upload server. The local engine has a 128 MiB upload limit to reduce memory pressure. Files are analyzed as data; XRay never executes the supplied target.
+   ```bash
+   export XRAY_HOST=0.0.0.0
+   export XRAY_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+   python3 engine/server.py
+   ```
+
+   In ChromeOS Settings, open **Developers → Linux development environment → Port forwarding** and forward port **8765**. Keep the Linux terminal running. Copy the token with `echo "$XRAY_TOKEN"`.
+
+4. In XRay, set the engine address to `http://127.0.0.1:8765`. On Chromebook, paste the copied token into **Engine token**. Click **Check connection** and allow local-network access if Chrome asks.
+5. Choose an APK, EXE, DLL, ELF, SO, or other supported binary. XRay submits it to your own engine, displays job progress, and downloads a ZIP containing decompiler output and an analysis report.
+
+The default desktop mode binds only to loopback and needs no token. Chromebook port-forwarding mode requires a token of at least 24 characters; the token is checked for health, upload, progress, and result requests. Do not share the token or expose the forwarded port publicly. The local engine has a 128 MiB upload limit to reduce memory pressure. Files are analyzed as data; XRay never executes the supplied target.
 
 ### Supported formats
 
