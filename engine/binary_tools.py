@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Best-effort binary adapters. Never executes input binaries."""
 from __future__ import annotations
+
+import hashlib
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,8 +11,10 @@ from pathlib import Path
 NATIVE_SUFFIXES = {".exe", ".dll", ".so", ".elf", ".o", ".a", ".dylib"}
 APK_SUFFIXES = {".apk"}
 WASM_SUFFIXES = {".wasm"}
+WASM_MAX_BYTES = 8 * 1024 * 1024
 
-def _run(command: list[str], timeout: int = 900) -> None:
+
+def _run(command: list[str], timeout: int = 900) -> subprocess.CompletedProcess[str]:
     try:
         result = subprocess.run(command, text=True, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired as exc:
@@ -19,6 +24,66 @@ def _run(command: list[str], timeout: int = 900) -> None:
     if result.returncode:
         detail = (result.stderr or result.stdout or "tool returned a non-zero exit code")[-4000:]
         raise RuntimeError(detail)
+    return result
+
+
+def _inspect_wasm(source: Path, output: Path) -> str:
+    size = source.stat().st_size
+    if size > WASM_MAX_BYTES:
+        raise RuntimeError(f"WASM input exceeds XRay's {WASM_MAX_BYTES}-byte safety limit.")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    validate = shutil.which("wasm-validate")
+    objdump = shutil.which("wasm-objdump")
+    wasm2wat = shutil.which("wasm2wat")
+    decompile = shutil.which("wasm-decompile")
+
+    if validate and objdump and wasm2wat:
+        validation = _run([validate, "--enable-all", "--ignore-custom-section-errors", str(source)])
+        sections = _run([objdump, "-h", "-x", str(source)])
+        wat = _run([wasm2wat, "--enable-all", "--ignore-custom-section-errors", str(source)])
+        (output / (source.stem + ".validation.txt")).write_text(
+            "WABT validation passed.\n" + (validation.stdout or validation.stderr), encoding="utf-8"
+        )
+        (output / (source.stem + ".sections.txt")).write_text(sections.stdout, encoding="utf-8")
+        (output / (source.stem + ".wat")).write_text(wat.stdout, encoding="utf-8")
+        report = {
+            "format": "WebAssembly",
+            "input": source.name,
+            "size_bytes": size,
+            "sha256": digest,
+            "validation": "passed",
+            "tools": {
+                "wasm-validate": validate,
+                "wasm-objdump": objdump,
+                "wasm2wat": wasm2wat,
+            },
+            "artifacts": {
+                "validation": source.stem + ".validation.txt",
+                "sections": source.stem + ".sections.txt",
+                "wat": source.stem + ".wat",
+            },
+        }
+        (output / (source.stem + ".analysis.json")).write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
+        return (
+            f"WASM validated and inspected with WABT. WAT: {output / (source.stem + '.wat')}; "
+            f"sections: {output / (source.stem + '.sections.txt')}; SHA-256: {digest}"
+        )
+
+    if decompile:
+        target = output / (source.stem + ".decompiled.c")
+        _run([decompile, str(source), "-o", str(target)])
+        return f"WASM translated to C-like pseudocode: {target}. Install wasm-validate, wasm-objdump and wasm2wat for full artifact inspection."
+    if wasm2wat:
+        target = output / (source.stem + ".wat")
+        _run([wasm2wat, str(source), "-o", str(target)])
+        return f"WASM converted to WAT text: {target}. Install wasm-validate and wasm-objdump for validation and section evidence."
+    raise RuntimeError(
+        "WASM support requires WABT. Install wasm-validate, wasm-objdump and wasm2wat "
+        "(recommended), or wasm-decompile. See docs/BINARY_TOOLS.md."
+    )
+
 
 def decompile_binary(source: Path, output: Path) -> str:
     suffix = source.suffix.lower()
@@ -31,17 +96,7 @@ def decompile_binary(source: Path, output: Path) -> str:
         _run([tool, "-d", str(target), str(source)])
         return f"APK decoded with JADX into {target}; output is Java-like, not original source."
     if suffix in WASM_SUFFIXES:
-        tool = shutil.which("wasm-decompile")
-        if tool:
-            target = output / (source.stem + ".decompiled.c")
-            _run([tool, str(source), "-o", str(target)])
-            return f"WASM translated to C-like pseudocode: {target}"
-        tool = shutil.which("wasm2wat")
-        if tool:
-            target = output / (source.stem + ".wat")
-            _run([tool, str(source), "-o", str(target)])
-            return f"WASM converted to WAT text: {target}"
-        raise RuntimeError("WASM support requires WABT (wasm-decompile or wasm2wat) on PATH. See docs/BINARY_TOOLS.md.")
+        return _inspect_wasm(source, output)
     if suffix in NATIVE_SUFFIXES:
         tool = shutil.which("analyzeHeadless") or shutil.which("analyzeHeadless.bat")
         if not tool:
@@ -55,6 +110,7 @@ def decompile_binary(source: Path, output: Path) -> str:
               "-deleteProject"], timeout=1800)
         return f"Native binary analyzed with Ghidra; pseudocode exported to {target}"
     raise RuntimeError(f"unsupported binary extension: {suffix or '(none)'}")
+
 
 def is_supported_binary(path: Path) -> bool:
     return path.suffix.lower() in APK_SUFFIXES | WASM_SUFFIXES | NATIVE_SUFFIXES
