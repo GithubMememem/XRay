@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import json
-import mimetypes
+import hmac
 import os
 import tempfile
 import threading
@@ -19,6 +19,8 @@ from binary_tools import decompile_binary, is_supported_binary
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_UPLOAD = 128 * 1024 * 1024
+BIND_HOST = os.environ.get("XRAY_HOST", "127.0.0.1")
+ENGINE_TOKEN = os.environ.get("XRAY_TOKEN", "")
 ALLOWED_ORIGINS = {
     "https://githubmememem.github.io",
     "http://127.0.0.1:8765",
@@ -55,16 +57,11 @@ def make_bundle(source_name: str, payload: bytes, progress=None) -> tuple[bytes,
 class Handler(BaseHTTPRequestHandler):
     server_version = "XRayLocalEngine/1.0"
 
-    def headers(self, content_type: str = "application/json") -> None:
-        origin = self.headers_in_origin
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        if origin in ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("X-Content-Type-Options", "nosniff")
+    def authorized(self) -> bool:
+        if not ENGINE_TOKEN:
+            return True
+        supplied = self.headers.get("Authorization", "")
+        return hmac.compare_digest(supplied, "Bearer " + ENGINE_TOKEN)
 
     @property
     def headers_in_origin(self) -> str:
@@ -77,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
 
@@ -94,12 +91,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        if not self.authorized():
+            self.json_response(401, {"error": "Invalid or missing XRay engine token."})
+            return
         if self.path == "/api/health":
             self.json_response(200, {"ok": True, "engine": "XRay local", "formats": ["apk", "exe", "dll", "elf", "so", "dylib", "o", "a", "wasm"]})
             return
         self.json_response(404, {"error": "Not found"})
 
     def do_POST(self) -> None:
+        if not self.authorized():
+            self.json_response(401, {"error": "Invalid or missing XRay engine token."})
+            return
         if self.path != "/api/analyze":
             self.json_response(404, {"error": "Not found"})
             return
@@ -155,6 +158,9 @@ class Handler(BaseHTTPRequestHandler):
 
 class JobHandler(Handler):
     def do_GET(self) -> None:
+        if not self.authorized():
+            self.json_response(401, {"error": "Invalid or missing XRay engine token."})
+            return
         if self.path.startswith("/api/jobs/"):
             job_id = self.path.rsplit("/", 1)[-1]
             with LOCK:
@@ -187,9 +193,13 @@ class JobHandler(Handler):
 
 
 if __name__ == "__main__":
-    address = os.environ.get("XRAY_HOST", "127.0.0.1")
+    address = BIND_HOST
     port = int(os.environ.get("XRAY_PORT", "8765"))
-    if address not in {"127.0.0.1", "localhost"}:
-        raise SystemExit("For safety, XRay API only binds to loopback. Do not expose it to a public network.")
+    if address not in {"127.0.0.1", "localhost", "0.0.0.0"}:
+        raise SystemExit("XRAY_HOST must be 127.0.0.1, localhost, or 0.0.0.0.")
+    if address == "0.0.0.0" and len(ENGINE_TOKEN) < 24:
+        raise SystemExit("Binding for Chromebook port forwarding requires XRAY_TOKEN with at least 24 characters.")
     print(f"XRay local engine listening at http://{address}:{port}")
+    if address == "0.0.0.0":
+        print("Token authentication is enabled. Enter the same XRAY_TOKEN in the XRay website.")
     ThreadingHTTPServer((address, port), JobHandler).serve_forever()
