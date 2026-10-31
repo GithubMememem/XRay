@@ -1,67 +1,43 @@
 # XRay
 
-XRay is a local-first reverse-engineering workspace. It separates lightweight browser inspection from real binary decompilation performed by local specialist tools.
+XRay is a browser-first binary inspection workspace. The GitHub Pages version does not require a terminal, Python server, local engine, or file upload to a remote service.
 
-## Browser interface
+## Open XRay
 
-Live UI: https://githubmememem.github.io/XRay/
+https://githubmememem.github.io/XRay/
 
-The GitHub Pages site can inspect WASM in the browser and clean existing source/decompiler output. It also accepts APK and native binary files, but those formats require the local XRay engine described below. GitHub Pages itself cannot run JADX or Ghidra.
+Choose a file or drop it into the workspace. Analysis runs in the browser tab, and the progress display reports the current parsing stage.
 
-## APK and EXE decompilation
+## Browser-supported workflows
 
-1. Install Python 3.10+.
-2. Install JADX for APK files and Ghidra for EXE/DLL/ELF/SO files. Ensure `jadx` or `analyzeHeadless` is on PATH.
-3. From the repository root, start the local API.
-
-   **On a normal desktop:**
-
-   ```bash
-   python3 engine/server.py
-   ```
-
-   **On a Chromebook using the Linux development environment (Crostini):** ChromeOS runs Linux in a separate container, so a server bound only to Linux's `127.0.0.1` may not be reachable from the Chrome browser. Start it with a token and listen for ChromeOS port forwarding:
-
-   ```bash
-   export XRAY_HOST=0.0.0.0
-   export XRAY_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
-   python3 engine/server.py
-   ```
-
-   In ChromeOS Settings, open **Developers → Linux development environment → Port forwarding** and forward port **8765**. Keep the Linux terminal running. Copy the token with `echo "$XRAY_TOKEN"`.
-
-4. In XRay, set the engine address to `http://127.0.0.1:8765`. On Chromebook, paste the copied token into **Engine token**. Click **Check connection** and allow local-network access if Chrome asks.
-5. Choose an APK, EXE, DLL, ELF, SO, or other supported binary. XRay submits it to your own engine, displays job progress, and downloads a ZIP containing decompiler output and an analysis report.
-
-The default desktop mode binds only to loopback and needs no token. Chromebook port-forwarding mode requires a token of at least 24 characters; the token is checked for health, upload, progress, and result requests. Do not share the token or expose the forwarded port publicly. The local engine has a 128 MiB upload limit to reduce memory pressure. Files are analyzed as data; XRay never executes the supplied target.
-
-### Supported formats
-
-| File | Engine | Output |
+| File | Browser workflow | What it provides |
 |---|---|---|
-| APK | JADX | Java-like source and extracted resources |
-| EXE, DLL, ELF, SO, DYLIB, O, A | Ghidra headless | Per-function C-like pseudocode |
-| WASM | WABT | Validation, section report, and WAT |
-| C/C++, JS, Java, ASM, WAT, text | Browser | Conservative source cleanup |
+| WASM | WABT in a Web Worker | Module validation, section/import/export report, SHA-256 and WAT conversion |
+| APK | ZIP + DEX inspection | Package file listing, manifest presence, DEX string identifiers, type identifiers and class descriptors |
+| EXE / DLL | PE parser | Architecture, entry point, image base, sections, imported DLL names and readable ASCII strings |
+| C/C++, JS, Java, ASM, WAT, text | Source cleanup | Conservative cleanup of common decompiler names, selected masks and explicitly requested pointer-offset rewrites |
 
-## WebAssembly
+APK and PE inspection is static metadata/structure analysis. It does **not** reconstruct full Java, C or C++ source code. Android binary XML manifests are detected but not fully decoded. EXE analysis currently targets Windows PE files; ELF, SO, DYLIB, O and A are not browser-supported in this Pages build.
 
-Open a `.wasm` file in the browser. XRay parses module sections, imports, exports, function/type counts and SHA-256, then validates and converts it with WABT in a background Web Worker. The browser flow is capped at 8 MiB. The WABT JavaScript module is fetched from esm.sh on first use, so that first conversion needs internet access.
+## Privacy and performance
 
-## Source cleanup
+- Files are read locally by the browser and are not sent to an XRay server.
+- No uploaded binary is executed.
+- APK files are limited to 48 MiB; PE files are limited to 96 MiB; WASM files are limited to 8 MiB.
+- APK archives are unpacked in browser memory, so very large or unusually compressed packages may exceed device memory.
+- WASM conversion loads WABT from esm.sh the first time, so an internet connection is needed for that dependency.
+- The fflate package is loaded from esm.sh when an APK is opened.
 
-The cleanup pass can rename common decompiler-generated local names, simplify selected 32-bit masks, and optionally rewrite byte offsets as array indexes when an element size is explicitly selected. These are heuristics, not a compiler or a true decompiler.
+## Accuracy
 
-## Limits and accuracy
-
-Decompiler output is an approximation. Compilers discard comments, formatting, many original names, and sometimes type/control-flow information. APK output is Java-like reconstruction; native output is pseudocode; WASM output is WAT. Keep the original binary and review the output. Analyze only files you own or are authorized to inspect.
+This version provides inspection data, not full reverse-engineering decompilation for APK/EXE. A real source-level decompiler such as JADX or Ghidra requires a compute environment that can run those tools; a static GitHub Pages site cannot run them by itself. XRay avoids presenting metadata or extracted strings as recovered source code.
 
 ## Development
 
-Run the Python test suite with:
+Run the optional Python analysis utilities/tests from a development environment:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-See [binary tool setup](docs/BINARY_TOOLS.md) for installation details.
+The legacy local analysis API and specialist-tool integrations remain in the repository for development, but the published browser UI does not depend on them. See [binary tool notes](docs/BINARY_TOOLS.md).
