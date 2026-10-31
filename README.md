@@ -1,31 +1,41 @@
 # XRay
 
-XRay is an offline-first, deterministic source-reconstruction and code-cleanup toolkit. It provides a browser interface and a Python command-line engine.
+XRay is a local-first binary inspection and source reconstruction workspace. The browser UI combines a launcher-style file discovery flow with a code workspace.
 
-## Run in the browser
-Open [index.html](index.html) in a browser, or enable GitHub Pages for this repository (Settings → Pages → Deploy from a branch → main → /root).
+## Browser app
 
-The browser tool processes text-based source locally. Files are not uploaded anywhere.
+Open [index.html](index.html), or enable GitHub Pages (Settings → Pages → Deploy from a branch → main → /root).
 
-## Run the Python engine
-Python 3.10+; no third-party packages required.
+- **WebAssembly:** open a `.wasm` file and XRay loads WABT's JavaScript/WebAssembly build in the browser to convert it to readable `.wat` text. The conversion runs in the browser tab; the file is not uploaded.
+- **Source and decompiler output:** paste or open C/C++, JavaScript, Java, ASM, WAT and text, then run the conservative cleanup pass locally.
+- **Export:** save the generated WAT or reconstructed text from the workspace.
+
+The WABT module is loaded from esm.sh on first WASM use, so an internet connection is needed for that first library load. After it loads, the actual conversion runs locally in the browser. WebGPU is not required: WebGPU accelerates certain GPU workloads but is not a general-purpose decompiler.
+
+## Python engine
+
+Python 3.10+; no third-party Python packages required for source cleanup.
 
 ```bash
 python engine/xray.py input.c -o recovered.c
 python engine/xray.py project.zip -o recovered-project/
-python engine/xray.py --help
+python engine/xray.py module.wasm -o output/
+python engine/xray.py app.apk -o output/
+python engine/xray.py program.exe -o output/
 ```
 
-The ZIP mode safely extracts supported source/text files and reconstructs them into the output folder. It rejects path traversal entries and skips oversized files.
+Optional binary tools:
+- WASM: WABT (`wasm-decompile` or `wasm2wat`)
+- APK: JADX
+- Native EXE/DLL/ELF/SO/object files: Ghidra headless
 
-## What it does
-- Removes selected low-risk disassembly/compiler noise (opt-in patterns only).
+See [Binary tool setup](docs/BINARY_TOOLS.md) for installation details. These tools produce WAT, extracted resources, disassembly or approximate pseudocode—not exact original source. XRay never executes a supplied target binary.
+
+## What the cleanup pass does
+
 - Renames common decompiler-generated local names consistently.
 - Simplifies selected 32-bit masks.
-- Optionally rewrites byte offsets as array indexes when you explicitly choose a 4-byte element size.
-- Uses clang-format when installed and requested.
+- Optionally rewrites byte offsets as array indexes when an element size is explicitly selected.
+- Uses clang-format when installed and requested by the Python CLI.
 
-## Important limits
-XRay now has optional local binary-analysis adapters. APK files can be decompiled with JADX, native EXE/DLL/SO/ELF files with Ghidra headless, and WASM files with WABT. Install the relevant tool and follow [Binary tool setup](docs/BINARY_TOOLS.md), then run the same CLI command with the binary as input. These tools produce extracted resources, disassembly, or approximate pseudocode—not the exact original source. XRay never executes the target binary.
-
-All transformations are heuristic and may change program meaning. Keep the original file, inspect the diff, and compile/test reconstructed code before relying on it.
+All transformations are heuristic and may change program meaning. Keep the original file and review, compile and test reconstructed output before relying on it.
