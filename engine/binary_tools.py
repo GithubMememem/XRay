@@ -27,7 +27,7 @@ def _run(command: list[str], timeout: int = 900) -> subprocess.CompletedProcess[
     return result
 
 
-def _inspect_wasm(source: Path, output: Path) -> str:
+def _inspect_wasm(source: Path, output: Path, progress=None) -> str:
     size = source.stat().st_size
     if size > WASM_MAX_BYTES:
         raise RuntimeError(f"WASM input exceeds XRay's {WASM_MAX_BYTES}-byte safety limit.")
@@ -43,11 +43,17 @@ def _inspect_wasm(source: Path, output: Path) -> str:
     decompile = shutil.which("wasm-decompile")
 
     if validate and objdump and wasm2wat:
+        if progress:
+            progress(40, "WABT: validating WebAssembly module")
         assert_unchanged()
         validation = _run([validate, "--enable-all", "--ignore-custom-section-errors", str(source)], timeout=30)
         assert_unchanged()
+        if progress:
+            progress(62, "WABT: inspecting sections and symbols")
         sections = _run([objdump, "-h", "-x", str(source)], timeout=30)
         assert_unchanged()
+        if progress:
+            progress(80, "WABT: converting module to WAT")
         wat = _run([wasm2wat, "--enable-all", "--ignore-custom-section-errors", str(source)], timeout=30)
         assert_unchanged()
         (output / (source.stem + ".validation.txt")).write_text(
@@ -81,12 +87,16 @@ def _inspect_wasm(source: Path, output: Path) -> str:
         )
 
     if decompile:
+        if progress:
+            progress(55, "WABT: translating module to C-like pseudocode")
         target = output / (source.stem + ".decompiled.c")
         assert_unchanged()
         _run([decompile, str(source), "-o", str(target)], timeout=30)
         assert_unchanged()
         return f"WASM translated to C-like pseudocode: {target}. Install wasm-validate, wasm-objdump and wasm2wat for full artifact inspection."
     if wasm2wat:
+        if progress:
+            progress(55, "WABT: converting module to WAT")
         target = output / (source.stem + ".wat")
         assert_unchanged()
         _run([wasm2wat, str(source), "-o", str(target)], timeout=30)
@@ -98,7 +108,7 @@ def _inspect_wasm(source: Path, output: Path) -> str:
     )
 
 
-def decompile_binary(source: Path, output: Path) -> str:
+def decompile_binary(source: Path, output: Path, progress=None) -> str:
     suffix = source.suffix.lower()
     output.mkdir(parents=True, exist_ok=True)
     if suffix in APK_SUFFIXES:
@@ -106,10 +116,14 @@ def decompile_binary(source: Path, output: Path) -> str:
         if not tool:
             raise RuntimeError("APK support requires JADX (jadx) on PATH. See docs/BINARY_TOOLS.md.")
         target = output / "jadx"
+        if progress:
+            progress(45, "JADX: decoding APK and recovering Java-like code")
         _run([tool, "-d", str(target), str(source)])
+        if progress:
+            progress(92, "JADX: packaging decoded sources and resources")
         return f"APK decoded with JADX into {target}; output is Java-like, not original source."
     if suffix in WASM_SUFFIXES:
-        return _inspect_wasm(source, output)
+        return _inspect_wasm(source, output, progress)
     if suffix in NATIVE_SUFFIXES:
         tool = shutil.which("analyzeHeadless") or shutil.which("analyzeHeadless.bat")
         if not tool:
@@ -118,9 +132,13 @@ def decompile_binary(source: Path, output: Path) -> str:
         target = output / "decompiled"
         target.mkdir(parents=True, exist_ok=True)
         scripts = Path(__file__).resolve().parents[1] / "ghidra"
+        if progress:
+            progress(38, "Ghidra: importing binary and analyzing functions")
         _run([tool, str(project), "xray_analysis", "-import", str(source.resolve()),
               "-scriptPath", str(scripts), "-postScript", "ExportDecompiled.java", str(target),
               "-deleteProject"], timeout=1800)
+        if progress:
+            progress(92, "Ghidra: exporting decompiled function output")
         return f"Native binary analyzed with Ghidra; pseudocode exported to {target}"
     raise RuntimeError(f"unsupported binary extension: {suffix or '(none)'}")
 
