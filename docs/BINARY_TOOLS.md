@@ -1,31 +1,51 @@
 # Binary analysis tools
 
-XRay can launch specialist local tools for common binary formats. Install the relevant tool and ensure its executable is on PATH.
+XRay uses specialist local programs for real APK and native-binary decompilation. The GitHub Pages frontend is static; it cannot run Ghidra or JADX by itself.
+
+## Supported inputs
 
 | Input | Tool | Output |
 |---|---|---|
-| APK | JADX (jadx) | Java-like decompiled sources and resources |
-| EXE, DLL, SO, ELF, object files | Ghidra (analyzeHeadless) | Per-function C-like pseudocode |
-| WASM | WABT (wasm-validate, wasm-objdump, wasm2wat) | Validation report, section inventory, SHA-256 manifest and WAT |
+| APK | JADX (`jadx`) | Java-like decompiled sources and resources |
+| EXE, DLL, SO, ELF, DYLIB, O, A | Ghidra (`analyzeHeadless`) | Per-function C-like pseudocode |
+| WASM | WABT | Validation report, section inventory, manifest and WAT |
 
-## Install in Codespaces
+## Install tools
 
-- **JADX:** download a release from https://github.com/skylot/jadx/releases, unpack it, add its bin directory to PATH, and ensure Java is installed.
-- **Ghidra:** download from https://github.com/NationalSecurityAgency/ghidra/releases, unpack it, and add Ghidra's support directory to PATH.
-- **WABT:** use your distribution package manager where available, or download from https://github.com/WebAssembly/wabt.
+- **JADX:** https://github.com/skylot/jadx/releases. Install Java, unpack JADX and put its `bin` directory on PATH.
+- **Ghidra:** https://github.com/NationalSecurityAgency/ghidra/releases. Unpack it and put the Ghidra `support` directory on PATH so `analyzeHeadless` is available.
+- **WABT:** https://github.com/WebAssembly/wabt. Install `wasm-validate`, `wasm-objdump`, and `wasm2wat`.
 
-Check installation with `jadx --version`, `analyzeHeadless`, `wasm-validate --version`, `wasm-objdump --version`, and `wasm2wat --version`.
+Check PATH:
 
-## Run
+```bash
+jadx --version
+analyzeHeadless
+wasm-validate --version
+wasm-objdump --version
+wasm2wat --version
+```
 
-    python engine/xray.py app.apk -o output/
-    python engine/xray.py program.exe -o output/
-    python engine/xray.py module.wasm -o output/
+## Start the upload engine
 
-For native binaries, XRay uses `ghidra/ExportDecompiled.java` to export decompiler output for discovered functions.
+From the XRay repository root:
 
-For WASM, the Python engine uses the REA-style staged workflow: validate the selected bytes, inspect section metadata, decode WAT, and write a JSON manifest containing the input size, SHA-256 and tool paths. The browser UI performs bounded structural parsing itself, then uses WABT for validation and WAT conversion. Both paths are static inspection; they do not execute the module.
+```bash
+python engine/server.py
+```
+
+The API listens at `http://127.0.0.1:8765`. Keep it running while using the hosted website. In XRay, use that address in **Local engine address** and press **Check connection**. Then upload an APK or supported native binary. XRay displays the server job stage and downloads a ZIP of the output when analysis finishes.
+
+The service binds only to loopback. It allows the official XRay GitHub Pages origin and local UI origins. It accepts uploads up to 128 MiB, stores each input in a temporary directory, and deletes that temporary workspace when analysis ends. Do not change the bind address to expose it to a public network.
+
+## CLI alternative
+
+```bash
+python engine/xray.py app.apk -o output/
+python engine/xray.py program.exe -o output/
+python engine/xray.py module.wasm -o output/
+```
 
 ## Important
 
-These tools perform extraction, disassembly, and decompilation—not restoration of exact original source. Compilers remove comments, formatting, many variable names, and sometimes type/control-flow information. Decompiled output is approximate and may need manual repair. XRay never executes the target binary; it only passes it to the selected analysis tool. Analyze only files you own or are authorized to inspect, and treat output as untrusted.
+These tools perform extraction, disassembly and decompilation—not restoration of exact original source. Decompiled output is approximate. XRay never executes a supplied target binary; it only passes it to the selected analysis tool. Treat output as untrusted.
